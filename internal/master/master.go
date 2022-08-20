@@ -4,7 +4,32 @@ import (
 	"log"
 	"net"
 	"net/rpc"
+	"sync"
+	"time"
 )
+
+type ServerManager struct {
+	servers map[string]ServerMeta
+	sync.RWMutex
+}
+
+type ServerMeta struct {
+	existingChunks map[int64]struct{}
+	heartbeatTime  time.Time
+	sync.RWMutex
+}
+
+type DataManager struct {
+	sync.RWMutex
+	mp map[int64]FileMeta
+}
+
+type FileMeta struct {
+	primaryLocation  string
+	replicaLocations []string
+	lease            time.Time
+	sync.RWMutex
+}
 
 type MasterServer struct {
 	listener net.Listener
