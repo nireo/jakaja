@@ -130,6 +130,8 @@ type MasterServer struct {
 	listener net.Listener
 	addr     string
 	stop     chan struct{}
+	srvm     *ServerManager
+	dm       *DataManager
 }
 
 func NewMaster(addr string) (*MasterServer, error) {
@@ -137,6 +139,12 @@ func NewMaster(addr string) (*MasterServer, error) {
 	serv := &MasterServer{
 		addr: addr,
 		stop: make(chan struct{}),
+		srvm: &ServerManager{
+			servers: make(map[string]*ServerMeta),
+		},
+		dm: &DataManager{
+			mp: make(map[int64]*FileMeta),
+		},
 	}
 
 	rpcServer := rpc.NewServer()
