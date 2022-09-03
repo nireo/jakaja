@@ -13,9 +13,9 @@ const (
 )
 
 type Entry struct {
-	Volumes []string
-	Status  DeletionStatus
-	Hash    string
+	Storages []string
+	Status   DeletionStatus
+	Hash     string
 }
 
 // EntryFromBytes creates a entry struct from a given byte array. It first converts
@@ -35,7 +35,7 @@ func EntryFromBytes(b []byte) Entry {
 		e.Hash = s[4:36]
 		s = s[36:]
 	}
-	e.Volumes = strings.Split(s, ",")
+	e.Storages = strings.Split(s, ",")
 
 	return e
 }
@@ -54,5 +54,5 @@ func (e *Entry) ToBytes() []byte {
 	if len(e.Hash) == 32 {
 		prefixStr += "HASH" + e.Hash
 	}
-	return []byte(prefixStr + strings.Join(e.Volumes, ","))
+	return []byte(prefixStr + strings.Join(e.Storages, ","))
 }

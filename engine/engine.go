@@ -9,11 +9,12 @@ import (
 )
 
 type Engine struct {
-	db           *leveldb.DB
-	mu           sync.Mutex
-	keylocks     map[string]struct{}
-	storages     []string
-	replicaCount int
+	db              *leveldb.DB
+	mu              sync.Mutex
+	keylocks        map[string]struct{}
+	storages        []string
+	replicaCount    int
+	substorageCount int
 }
 
 func (e *Engine) LockKey(key string) error {

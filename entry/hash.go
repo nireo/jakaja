@@ -9,8 +9,8 @@ import (
 )
 
 type volSort struct {
-	score  []byte
-	volume string
+	score   []byte
+	storage string
 }
 
 type byScore []volSort
@@ -28,12 +28,12 @@ func HashKey(key []byte) string {
 	return fmt.Sprintf("/%02x/%02x/%s", md5key[0], md5key[1], b64key)
 }
 
-// KeyToVolume converts a key and a volumes list into a list of available
-// volumes for a given key.
-func KeyToVolume(key []byte, volumes []string, count, sv int) []string {
-	vSort := make([]volSort, len(volumes))
+// KeyToStorage converts a key and a storages list into a list of available
+// storages for a given key.
+func KeyToStorage(key []byte, storages []string, count, sv int) []string {
+	vSort := make([]volSort, len(storages))
 
-	for idx, v := range volumes {
+	for idx, v := range storages {
 		hash := md5.New()
 		hash.Write(key)
 		hash.Write([]byte(v))
@@ -44,20 +44,20 @@ func KeyToVolume(key []byte, volumes []string, count, sv int) []string {
 
 	sort.Stable(byScore(vSort))
 
-	rvolumes := make([]string, count)
+	rstorages := make([]string, count)
 	for i := 0; i < count; i++ {
 		s := vSort[i]
 		var vol string
 		if sv == 1 {
-			vol = s.volume
+			vol = s.storage
 		} else {
 			svhash := uint(s.score[12])<<24 + uint(s.score[13])<<16 +
 				uint(s.score[14])<<8 + uint(s.score[15])
-			vol = fmt.Sprintf("%s/sv%02X", s.volume, svhash%uint(sv))
+			vol = fmt.Sprintf("%s/sv%02X", s.storage, svhash%uint(sv))
 		}
 
-		rvolumes[i] = vol
+		rstorages[i] = vol
 	}
 
-	return rvolumes
+	return rstorages
 }
