@@ -1,7 +1,11 @@
 package engine
 
 import (
+	"bytes"
+	"crypto/md5"
 	"fmt"
+	"io"
+	"log"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -22,6 +26,46 @@ func shouldBalance(entryStorages, keyStorages []string) bool {
 	}
 
 	return false
+}
+
+// WriteToStorage handles writing the key-value pair into storage volumes. It
+// returns the resulting http status code.
+func (e *Engine) WriteToStorage(key []byte, value io.Reader, clen int64) int {
+	keyStorages := entry.KeyToStorage(key, e.storages, e.replicaCount, e.substorageCount)
+
+	if err := e.Put(key, entry.Entry{
+		Storages: keyStorages,
+		Status:   entry.SoftDeleted,
+		Hash:     "",
+	}); err != nil {
+		return http.StatusInternalServerError
+	}
+
+	var buf bytes.Buffer
+	body := io.TeeReader(value, &buf)
+
+	for i := 0; i < len(keyStorages); i++ {
+		if i != 0 {
+			body = bytes.NewReader(buf.Bytes())
+		}
+
+		addr := fmt.Sprintf("http://%s%s", keyStorages[i], entry.HashKey(key))
+		if httpput(addr, body, clen) != nil {
+			log.Printf("replica %d write failed: %s\n", i, addr)
+			return http.StatusInternalServerError
+		}
+	}
+
+	hash := fmt.Sprintf("%x", md5.Sum(buf.Bytes()))
+	if err := e.Put(key, entry.Entry{
+		Storages: e.storages,
+		Status:   entry.Exists,
+		Hash:     hash,
+	}); err != nil {
+		return http.StatusInternalServerError
+	}
+
+	return http.StatusCreated
 }
 
 func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -78,5 +122,10 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Location", addr)
 		w.Header().Set("Content-Length", "0")
 		w.WriteHeader(http.StatusMovedPermanently)
+	case http.MethodPost:
+		status := e.WriteToStorage(key, r.Body, r.ContentLength)
+		w.WriteHeader(status)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }

@@ -34,13 +34,13 @@ func (e *Engine) RemoveLock(key string) {
 	delete(e.keylocks, key)
 }
 
-func (e *Engine) Put(key []byte, ent *entry.Entry) error {
+func (e *Engine) Put(key []byte, ent entry.Entry) error {
 	return e.db.Put(key, ent.ToBytes(), nil)
 }
 
 func (e *Engine) Get(key []byte) entry.Entry {
 	b, err := e.db.Get(key, nil)
-	en := entry.Entry{Volumes: []string{}, Status: entry.HardDeleted, Hash: ""}
+	en := entry.Entry{Storages: []string{}, Status: entry.HardDeleted, Hash: ""}
 
 	if err == leveldb.ErrNotFound {
 		return en
