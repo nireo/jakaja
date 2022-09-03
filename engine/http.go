@@ -1,5 +1,15 @@
 package engine
 
+// http.go implements the http server interface and thus also handles all of the
+// http endpoints. The methods are:
+// - POST: Create entry
+// - GET: Find entry
+// - DELETE: Delete Entry
+//
+// Address format is http://localhost:$PORT/$KEYNAME. Having KEYNAME as path makes
+// parsing easier and helps getting information out of the address. Other information
+// is not passed in the URL, rather using HTTP headers.
+
 import (
 	"bytes"
 	"crypto/md5"
@@ -33,6 +43,7 @@ func shouldBalance(entryStorages, keyStorages []string) bool {
 func (e *Engine) WriteToStorage(key []byte, value io.Reader, clen int64) int {
 	keyStorages := entry.KeyToStorage(key, e.storages, e.replicaCount, e.substorageCount)
 
+	// write entry into the leveldb
 	if err := e.Put(key, entry.Entry{
 		Storages: keyStorages,
 		Status:   entry.SoftDeleted,
@@ -43,12 +54,13 @@ func (e *Engine) WriteToStorage(key []byte, value io.Reader, clen int64) int {
 
 	var buf bytes.Buffer
 	body := io.TeeReader(value, &buf)
-
+	// loop over all storages
 	for i := 0; i < len(keyStorages); i++ {
 		if i != 0 {
 			body = bytes.NewReader(buf.Bytes())
 		}
 
+		// send body to all storage servers
 		addr := fmt.Sprintf("http://%s%s", keyStorages[i], entry.HashKey(key))
 		if httpput(addr, body, clen) != nil {
 			log.Printf("replica %d write failed: %s\n", i, addr)
@@ -56,6 +68,7 @@ func (e *Engine) WriteToStorage(key []byte, value io.Reader, clen int64) int {
 		}
 	}
 
+	// md5 checksum
 	hash := fmt.Sprintf("%x", md5.Sum(buf.Bytes()))
 	if err := e.Put(key, entry.Entry{
 		Storages: e.storages,
@@ -66,6 +79,39 @@ func (e *Engine) WriteToStorage(key []byte, value io.Reader, clen int64) int {
 	}
 
 	return http.StatusCreated
+}
+
+// Delete removes a given key and returns a http response status.
+func (e *Engine) DeleteHandler(key []byte) int {
+	ent := e.Get(key)
+	if ent.Status == entry.HardDeleted {
+		return http.StatusNotFound
+	}
+
+	if err := e.Put(key, entry.Entry{
+		Storages: ent.Storages,
+		Status:   entry.SoftDeleted,
+		Hash:     ent.Hash,
+	}); err != nil {
+		return http.StatusInternalServerError
+	}
+
+	failed := false
+	for _, sto := range ent.Storages {
+		addr := fmt.Sprintf("http://%s%s", sto, entry.HashKey(key))
+		if httpdel(addr) != nil {
+			failed = true
+		}
+	}
+
+	if failed {
+		return http.StatusInternalServerError
+	}
+
+	// can hard delete
+	e.db.Delete(key, nil)
+
+	return http.StatusNoContent
 }
 
 func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -124,6 +170,9 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMovedPermanently)
 	case http.MethodPost:
 		status := e.WriteToStorage(key, r.Body, r.ContentLength)
+		w.WriteHeader(status)
+	case http.MethodDelete:
+		status := e.DeleteHandler(key)
 		w.WriteHeader(status)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
