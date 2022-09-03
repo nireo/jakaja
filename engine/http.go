@@ -41,7 +41,7 @@ func shouldBalance(entryStorages, keyStorages []string) bool {
 // WriteToStorage handles writing the key-value pair into storage volumes. It
 // returns the resulting http status code.
 func (e *Engine) WriteToStorage(key []byte, value io.Reader, clen int64) int {
-	keyStorages := entry.KeyToStorage(key, e.storages, e.replicaCount, e.substorageCount)
+	keyStorages := entry.KeyToStorage(key, e.Storages, e.ReplicaCount, e.SubstorageCount)
 
 	// write entry into the leveldb
 	if err := e.Put(key, entry.Entry{
@@ -71,7 +71,7 @@ func (e *Engine) WriteToStorage(key []byte, value io.Reader, clen int64) int {
 	// md5 checksum
 	hash := fmt.Sprintf("%x", md5.Sum(buf.Bytes()))
 	if err := e.Put(key, entry.Entry{
-		Storages: e.storages,
+		Storages: e.Storages,
 		Status:   entry.Exists,
 		Hash:     hash,
 	}); err != nil {
@@ -109,7 +109,7 @@ func (e *Engine) DeleteHandler(key []byte) int {
 	}
 
 	// can hard delete
-	e.db.Delete(key, nil)
+	e.DB.Delete(key, nil)
 
 	return http.StatusNoContent
 }
@@ -141,7 +141,7 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		keyStorages := entry.KeyToStorage(key, e.storages, e.replicaCount, e.substorageCount)
+		keyStorages := entry.KeyToStorage(key, e.Storages, e.ReplicaCount, e.SubstorageCount)
 		if shouldBalance(ent.Storages, keyStorages) {
 			w.Header().Set("Balanced", "n")
 		} else {

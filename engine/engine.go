@@ -9,37 +9,37 @@ import (
 )
 
 type Engine struct {
-	db              *leveldb.DB
+	DB              *leveldb.DB
 	mu              sync.Mutex
-	keylocks        map[string]struct{}
-	storages        []string
-	replicaCount    int
-	substorageCount int
+	Keylocks        map[string]struct{}
+	Storages        []string
+	ReplicaCount    int
+	SubstorageCount int
 }
 
 func (e *Engine) LockKey(key string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if _, ok := e.keylocks[key]; ok {
+	if _, ok := e.Keylocks[key]; ok {
 		return fmt.Errorf("key already locked")
 	}
-	e.keylocks[key] = struct{}{}
+	e.Keylocks[key] = struct{}{}
 	return nil
 }
 
 func (e *Engine) RemoveLock(key string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	delete(e.keylocks, key)
+	delete(e.Keylocks, key)
 }
 
 func (e *Engine) Put(key []byte, ent entry.Entry) error {
-	return e.db.Put(key, ent.ToBytes(), nil)
+	return e.DB.Put(key, ent.ToBytes(), nil)
 }
 
 func (e *Engine) Get(key []byte) entry.Entry {
-	b, err := e.db.Get(key, nil)
+	b, err := e.DB.Get(key, nil)
 	en := entry.Entry{Storages: []string{}, Status: entry.HardDeleted, Hash: ""}
 
 	if err == leveldb.ErrNotFound {
