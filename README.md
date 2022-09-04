@@ -13,13 +13,19 @@ Basic usage
 $ PORT=9001 ./storage
 ...
 
-$ ./jakaja --storages=https://localhost:9001,https://localhost:9002,https://localhost:9003 --action=serve --db=index.db
+$ ./jakaja --storages=http://localhost:9001,http://localhost:9002,http://localhost:9003 --action=serve --db=index.db
 ```
 
 Rebuild the levedb index
 
 ```
-$ ./jakaja --storages=https://localhost:9001,https://localhost:9002,https://localhost:9003 --db=./index.db --action=build
+$ ./jakaja --storages=http://localhost:9001,http://localhost:9002,http://localhost:9003 --db=./index.db --action=build
+```
+
+Change servers
+
+```
+$ ./jakaja --storages=http://localhost:9001,http://localhost:9002,http://localhost:9003 --db=./index.db --action=balance
 ```
 
 ## Benchmarks

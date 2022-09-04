@@ -52,6 +52,8 @@ func main() {
 		http.ListenAndServe(fmt.Sprintf(":%d", *port), eng)
 	case "build":
 		eng.Build()
+	case "balance":
+		eng.Balance()
 	default:
 		log.Fatalln("jakaja: unrecognized action")
 	}
