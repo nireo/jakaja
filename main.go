@@ -47,7 +47,13 @@ func main() {
 		DB:              db,
 	}
 
-	if *action == "serve" {
+	switch *action {
+	case "serve":
 		http.ListenAndServe(fmt.Sprintf(":%d", *port), eng)
+	case "build":
+		eng.Build()
+	default:
+		log.Fatalln("jakaja: unrecognized action")
 	}
+
 }
