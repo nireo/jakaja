@@ -23,11 +23,17 @@ func main() {
 	storages := flag.String("storage", "", "The storage servers in which to store files in.")
 	action := flag.String("action", "serve", "The action you want the server to do: serve, rebuild")
 
+	flag.Parse()
+
 	if *storages == "" {
 		log.Fatalln("jakaja: storage information not provided")
 	}
 
 	storageList := strings.Split(*storages, ",")
+
+	if len(storageList) < *replicaCount {
+		log.Fatalln("jakaja: The amount of required replicas is larger than the amount of files")
+	}
 
 	if *dbPath == "" {
 		log.Fatalln("jakaja: index database file not provided")
