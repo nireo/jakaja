@@ -1,0 +1,9 @@
+test:
+	go test -v ./...
+
+check:
+	go vet ./...
+	staticcheck ./...
+
+build:
+	go build --ldflags "-s" -o jakaja

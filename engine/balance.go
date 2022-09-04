@@ -106,11 +106,7 @@ func (e *Engine) balance(r breq) bool {
 		}
 	}
 
-	if delErr {
-		return false
-	}
-
-	return true
+	return !delErr
 }
 
 func (e *Engine) Balance() {
