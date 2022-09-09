@@ -1,18 +1,20 @@
 #!/bin/bash -e
-export STORAGE=${1:-/tmp/storage1/}
-export TYPE=storage
+export VOLUME=${1:-/tmp/volume1/}
+export TYPE=volume
 export PORT=${PORT:-3001}
 
-mkdir -p $STORAGE
-chmod 777 $STORAGE
+mkdir -p $VOLUME
+chmod 777 $VOLUME
 
 CONF=$(mktemp)
 echo "
-daemon off;
+daemon off; # docker
+#worker_rlimit_nofile 100000;
 worker_processes auto;
 pcre_jit on;
+
 error_log /dev/stderr;
-pid $STORAGE/nginx.pid;
+pid $VOLUME/nginx.pid;
 
 events {
   #use epoll;
@@ -24,24 +26,35 @@ events {
 http {
   sendfile on;
   sendfile_max_chunk 1024k;
+
   tcp_nopush on;
   tcp_nodelay on;
+
   open_file_cache off;
   types_hash_max_size 2048;
+
   server_tokens off;
+
   default_type application/octet-stream;
+
   error_log /dev/stderr error; # docker
 
   server {
     listen $PORT default_server backlog=4096;
     location / {
-      root $STORAGE;
+      root $VOLUME;
       disable_symlinks off;
-      client_body_temp_path $STORAGE/body_temp;
+
+      client_body_temp_path $VOLUME/body_temp;
       client_max_body_size 0;
+
+      # this causes tests to fail
+      #client_body_buffer_size 0;
+
       dav_methods PUT DELETE;
       dav_access group:rw all:r;
       create_full_put_path on;
+
       autoindex on;
       autoindex_format json;
     }
@@ -49,4 +62,4 @@ http {
 }
 " > $CONF
 echo "starting nginx on $PORT"
-nginx -c $CONF -p $STORAGE/tmp
+nginx -c $CONF -p $VOLUME/tmp
