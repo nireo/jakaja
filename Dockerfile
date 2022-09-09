@@ -1,4 +1,4 @@
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -14,8 +14,10 @@ RUN apt-get update && \
 WORKDIR /
 
 COPY ./storage /storage
+COPY ./start /start
+COPY ./jakaja /jakaja
 
+RUN chmod +x /start
 RUN chmod +x /storage
-EXPOSE ${PORT}
 
-RUN PORT=${PORT} ./storage ${STORAGE} &
+CMD ./start

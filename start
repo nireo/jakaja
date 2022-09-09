@@ -1,0 +1,6 @@
+#!/bin/bash
+PORT=3001 ./storage /tmp/volume1/ &
+PORT=3002 ./storage /tmp/volume2/ &
+PORT=3003 ./storage /tmp/volume3/ &
+
+./jakaja --storage=ocalhost:3001,localhost:3002,localhost:3003 --db=/tmp/indexdb/ --action=serve

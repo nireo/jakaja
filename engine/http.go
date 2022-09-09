@@ -62,8 +62,8 @@ func (e *Engine) WriteToStorage(key []byte, value io.Reader, clen int64) int {
 
 		// send body to all storage servers
 		addr := fmt.Sprintf("http://%s%s", keyStorages[i], entry.HashKey(key))
-		if httpput(addr, body, clen) != nil {
-			log.Printf("replica %d write failed: %s\n", i, addr)
+		if err := httpput(addr, body, clen); err != nil {
+			log.Printf("replica %d write failed: %s %s\n", i, addr, err)
 			return http.StatusInternalServerError
 		}
 	}
@@ -168,7 +168,7 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Location", addr)
 		w.Header().Set("Content-Length", "0")
 		w.WriteHeader(http.StatusMovedPermanently)
-	case http.MethodPost:
+	case http.MethodPut:
 		status := e.WriteToStorage(key, r.Body, r.ContentLength)
 		w.WriteHeader(status)
 	case http.MethodDelete:
