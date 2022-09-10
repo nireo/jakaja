@@ -121,13 +121,14 @@ func (e *Engine) Build() {
 
 	// spawn 128 goroutines to execute rebuilding
 	for i := 0; i < 128; i++ {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			for req := range requests {
 				files := addrFiles(req.addr)
 				for _, f := range files {
 					e.buildFile(req.storage, f.name)
 				}
-				wg.Done()
 			}
 		}()
 	}
@@ -137,7 +138,6 @@ func (e *Engine) Build() {
 			if valid(i) {
 				for _, j := range addrFiles(fmt.Sprintf("http://%s/%s/", sto, i.name)) {
 					if valid(j) {
-						wg.Add(1)
 						addr := fmt.Sprintf("http://%s/%s/%s/", sto, i.name, j.name)
 						requests <- rreq{sto, addr}
 					}

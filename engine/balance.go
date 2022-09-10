@@ -113,10 +113,11 @@ func (e *Engine) Balance() {
 	var wg sync.WaitGroup
 	requests := make(chan breq, 20000)
 	for i := 0; i < 16; i++ {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			for r := range requests {
 				e.balance(r)
-				wg.Done()
 			}
 		}()
 	}
@@ -128,9 +129,7 @@ func (e *Engine) Balance() {
 		key := make([]byte, len(it.Key()))
 		copy(key, it.Key())
 		ent := entry.EntryFromBytes(it.Value())
-
 		keyStorages := entry.KeyToStorage(key, e.Storages, e.ReplicaCount, e.SubstorageCount)
-		wg.Add(1)
 
 		requests <- breq{
 			key:         key,

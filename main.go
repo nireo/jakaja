@@ -25,6 +25,7 @@ func main() {
 
 	flag.Parse()
 
+	// validate command line arguments
 	if *storages == "" {
 		log.Fatalln("jakaja: storage information not provided")
 	}
@@ -39,6 +40,7 @@ func main() {
 		log.Fatalln("jakaja: index database file not provided")
 	}
 
+	// setup index database
 	db, err := leveldb.OpenFile(*dbPath, nil)
 	if err != nil {
 		log.Fatalln("jakaja: failed to open index database:", err)
@@ -55,7 +57,9 @@ func main() {
 
 	switch *action {
 	case "serve":
-		http.ListenAndServe(fmt.Sprintf(":%d", *port), eng)
+		if err := http.ListenAndServe(fmt.Sprintf(":%d", *port), eng); err != nil {
+			panic(err)
+		}
 	case "build":
 		eng.Build()
 	case "balance":
