@@ -15,10 +15,10 @@ import (
 	"crypto/md5"
 	"fmt"
 	"io"
-	"log"
 	"math/rand"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nireo/jakaja/entry"
@@ -52,24 +52,41 @@ func (e *Engine) WriteToStorage(key []byte, value io.Reader, clen int64) int {
 		return http.StatusInternalServerError
 	}
 
-	var buf bytes.Buffer
-	body := io.TeeReader(value, &buf)
-	// loop over all storages
-	for i := 0; i < len(keyStorages); i++ {
-		if i != 0 {
-			body = bytes.NewReader(buf.Bytes())
-		}
+	buf, err := io.ReadAll(value)
+	if err != nil {
+		return http.StatusInternalServerError
+	}
 
-		// send body to all storage servers
-		addr := fmt.Sprintf("http://%s%s", keyStorages[i], entry.HashKey(key))
-		if err := httpput(addr, body, clen); err != nil {
-			log.Printf("replica %d write failed: %s %s\n", i, addr, err)
-			return http.StatusInternalServerError
-		}
+	var wg sync.WaitGroup
+
+	// create a channel for errors so that we can concurrently handle them.
+	errs := make(chan error, len(keyStorages))
+
+	// Start a thread for each key storage that transports the file.
+	for i := 0; i < len(keyStorages); i++ {
+		wg.Add(1)
+
+		// start a thread that writes a given io.Reader body to a storage server using a HTTP Put request.
+		go func(storage string, body io.Reader) {
+			defer wg.Done()
+			addr := fmt.Sprintf("http://%s%s", storage, entry.HashKey(key))
+			if err := httpput(addr, body, clen); err != nil {
+				errs <- err
+			}
+		}(keyStorages[i], bytes.NewReader(buf))
+	}
+
+	// make sure that every write is done.
+	wg.Wait()
+	close(errs) // close the error channel
+
+	// if a single entry is in errors, the whole write process hasn't been successful.
+	for range errs {
+		return 500
 	}
 
 	// md5 checksum
-	hash := fmt.Sprintf("%x", md5.Sum(buf.Bytes()))
+	hash := fmt.Sprintf("%x", md5.Sum(buf))
 	if err := e.Put(key, entry.Entry{
 		Storages: e.Storages,
 		Status:   entry.Exists,
