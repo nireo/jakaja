@@ -24,6 +24,8 @@ import (
 	"github.com/nireo/jakaja/entry"
 )
 
+// shouldBalance checks that entryStorages and keyStorages should be the same.
+// if not then we need to balance the keys again.
 func shouldBalance(entryStorages, keyStorages []string) bool {
 	if len(entryStorages) != len(keyStorages) {
 		return true
@@ -81,7 +83,7 @@ func (e *Engine) WriteToStorage(key []byte, value io.Reader, clen int64) int {
 	close(errs) // close the error channel
 
 	// if a single entry is in errors, the whole write process hasn't been successful.
-	for range errs {
+	if len(errs) != 0 {
 		return 500
 	}
 
@@ -104,16 +106,15 @@ func (e *Engine) DeleteHandler(key []byte) int {
 	if ent.Status == entry.HardDeleted {
 		return http.StatusNotFound
 	}
+	ent.Status = entry.SoftDeleted
 
-	if err := e.Put(key, entry.Entry{
-		Storages: ent.Storages,
-		Status:   entry.SoftDeleted,
-		Hash:     ent.Hash,
-	}); err != nil {
+	if err := e.Put(key, ent); err != nil {
 		return http.StatusInternalServerError
 	}
 
 	failed := false
+
+	// delete the entry from all of the replica servers
 	for _, sto := range ent.Storages {
 		addr := fmt.Sprintf("http://%s%s", sto, entry.HashKey(key))
 		if httpdel(addr) != nil {
@@ -134,6 +135,7 @@ func (e *Engine) DeleteHandler(key []byte) int {
 func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	key := []byte(r.URL.Path)
 
+	// ensure that no other actions are being done on that key.
 	if r.Method == http.MethodGet || r.Method == http.MethodPut ||
 		r.Method == http.MethodDelete {
 		if err := e.LockKey(r.URL.Path); err != nil {
@@ -148,10 +150,12 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ent := e.Get(key)
 		var addr string
 
+		// set md5 checksum header if exists
 		if len(ent.Hash) != 0 {
 			w.Header().Set("Content-Md5", ent.Hash)
 		}
 
+		// cannot get value that has been softly or hardly deleted.
 		if ent.Status == entry.SoftDeleted || ent.Status == entry.HardDeleted {
 			w.Header().Set("Content-Length", "0")
 			w.WriteHeader(http.StatusNotFound)
@@ -159,6 +163,8 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		keyStorages := entry.KeyToStorage(key, e.Storages, e.ReplicaCount, e.SubstorageCount)
+
+		// set useful extra info in header
 		if shouldBalance(ent.Storages, keyStorages) {
 			w.Header().Set("Balanced", "n")
 		} else {
@@ -182,6 +188,7 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// redirect the request to the storage server.
 		w.Header().Set("Location", addr)
 		w.Header().Set("Content-Length", "0")
 		w.WriteHeader(http.StatusMovedPermanently)
