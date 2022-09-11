@@ -1,6 +1,9 @@
 package entry
 
 import (
+	"bytes"
+	"encoding/binary"
+	"math"
 	"strings"
 )
 
@@ -59,4 +62,71 @@ func (e *Entry) ToBytes() []byte {
 		prefixStr += "HASH" + e.Hash
 	}
 	return []byte(prefixStr + strings.Join(e.Storages, ","))
+}
+
+func (e *Entry) SerializeExperimental() []byte {
+	if e.Status == HardDeleted {
+		panic("cannot serialize hard delete")
+	}
+	b := bytes.NewBuffer(nil)
+	if e.Status == SoftDeleted {
+		a := make([]byte, 2)
+		binary.LittleEndian.PutUint16(a, math.MaxUint16)
+		b.Write(a)
+	}
+
+	if len(e.Hash) == 32 {
+		a := make([]byte, 2)
+		binary.LittleEndian.PutUint16(a, math.MaxUint16-1)
+		b.Write(a)
+		b.Write([]byte(e.Hash))
+	}
+
+	for idx := range e.Storages {
+		b.Write([]byte(e.Storages[idx]))
+		if idx != len(e.Storages)-1 {
+			b.Write([]byte{','})
+		}
+	}
+	return b.Bytes()
+}
+
+func DeserializeExperimental(b []byte) Entry {
+	var e Entry
+	e.Status = Exists
+	e.Storages = []string{}
+
+	// read prefixes properly first
+	pref := binary.LittleEndian.Uint16(b[0:2])
+	if pref == math.MaxUint16 {
+		// we have deletion
+		e.Status = SoftDeleted
+		pref = binary.LittleEndian.Uint16(b[2:4])
+	}
+
+	if pref == (math.MaxUint16 - 1) {
+		// we have a hash
+		e.Hash = string(b[4:36])
+		b = b[36:]
+	}
+
+	temp := make([]byte, 48)
+	pos := 0
+	// parse storages
+	for idx := range b {
+		if b[idx] == byte(',') {
+			e.Storages = append(e.Storages, string(temp[:pos]))
+			pos = 0
+		}
+
+		temp[pos] = b[idx]
+		pos++
+
+		if idx == len(b)-1 {
+			e.Storages = append(e.Storages, string(temp[:pos]))
+			pos = 0
+		}
+	}
+
+	return e
 }
