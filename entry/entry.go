@@ -4,6 +4,10 @@ import (
 	"strings"
 )
 
+// TODO: Make entry serialization and deserialization faster somehow. Since
+// manipulating strings (joining|splitting) is not that fast and makes a lot of
+// not necessary allocations.
+
 type DeletionStatus int
 
 const (
@@ -21,14 +25,14 @@ type Entry struct {
 // EntryFromBytes creates a entry struct from a given byte array. It first converts
 // the bytes into a strings on which analysis is easier.
 func EntryFromBytes(b []byte) Entry {
-	// TODO: only use bytes such that encoding is faster and more robust.
 	var e Entry
 	s := string(b)
 	e.Status = Exists
+	e.Hash = ""
 
 	if strings.HasPrefix(s, "DELETE") {
 		e.Status = SoftDeleted
-		s = s[7:]
+		s = s[6:]
 	}
 
 	if strings.HasPrefix(s, "HASH") {
