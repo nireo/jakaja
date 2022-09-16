@@ -1,5 +1,7 @@
 # jakaja
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/nireo/jakaja)](https://goreportcard.com/report/github.com/nireo/jakaja)
+
 > Jakaja means "the one who distributes" in Finnish.
 
 A minimal, fast and robust distributed file system using nginx as storage servers and a single master to control file distribution, replication and management.
