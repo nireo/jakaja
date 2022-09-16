@@ -63,6 +63,7 @@ func (e *Engine) WriteToStorage(key []byte, value io.Reader, clen int64) int {
 
 	// create a channel for errors so that we can concurrently handle them.
 	errs := make(chan error, len(keyStorages))
+	hashedKey := entry.HashKey(key)
 
 	// Start a thread for each key storage that transports the file.
 	for i := 0; i < len(keyStorages); i++ {
@@ -71,7 +72,7 @@ func (e *Engine) WriteToStorage(key []byte, value io.Reader, clen int64) int {
 		// start a thread that writes a given io.Reader body to a storage server using a HTTP Put request.
 		go func(storage string, body io.Reader) {
 			defer wg.Done()
-			addr := fmt.Sprintf("http://%s%s", storage, entry.HashKey(key))
+			addr := fmt.Sprintf("http://%s%s", storage, hashedKey)
 			if err := httpput(addr, body, clen); err != nil {
 				errs <- err
 			}
@@ -114,9 +115,11 @@ func (e *Engine) DeleteHandler(key []byte) int {
 
 	failed := false
 
+	hashedKey := entry.HashKey(key)
+
 	// delete the entry from all of the replica servers
 	for _, sto := range ent.Storages {
-		addr := fmt.Sprintf("http://%s%s", sto, entry.HashKey(key))
+		addr := fmt.Sprintf("http://%s%s", sto, hashedKey)
 		if httpdel(addr) != nil {
 			failed = true
 		}
@@ -147,6 +150,7 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet, http.MethodHead:
+		hashedKey := entry.HashKey(key)
 		ent := e.Get(key)
 		var addr string
 
@@ -166,15 +170,16 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		// set useful extra info in header
 		if shouldBalance(ent.Storages, keyStorages) {
-			w.Header().Set("Balanced", "n")
+			w.Header().Set("Balanced", "unbalanced")
 		} else {
-			w.Header().Set("Balanced", "y")
+			w.Header().Set("Balanced", "needs balance")
 		}
+
 		w.Header().Set("Storages", strings.Join(ent.Storages, ","))
 
 		ok := false
 		for _, ridx := range rand.Perm(len(ent.Storages)) {
-			addr = fmt.Sprintf("http://%s%s", ent.Storages[ridx], entry.HashKey(key))
+			addr = fmt.Sprintf("http://%s%s", ent.Storages[ridx], hashedKey)
 			found, _ := httpheader(addr, 1*time.Second)
 			if found {
 				ok = true
@@ -193,6 +198,19 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Length", "0")
 		w.WriteHeader(http.StatusMovedPermanently)
 	case http.MethodPut:
+		// no content length
+		if r.ContentLength == 0 {
+			w.WriteHeader(http.StatusLengthRequired)
+			return
+		}
+
+		// check if the key is deleted, or it already exists
+		ent := e.Get(key)
+		if ent.Status == entry.Exists {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+
 		status := e.WriteToStorage(key, r.Body, r.ContentLength)
 		w.WriteHeader(status)
 	case http.MethodDelete:
